@@ -740,6 +740,95 @@ step(
   `toolBehindDialog=${behindDialog}`,
 );
 
+// ── 28. SVG import is deterministic, rasterized, and fail-closed ─────────
+// Exercise the browser APIs that unit tests intentionally do not emulate:
+// DOMParser, XMLSerializer, SVG image decoding, and transparent pixels.
+const svgImport = await page.evaluate(async () => {
+  const { prepareSvgImport, rasterizeSvg } = await import("/src/io/svgImport.ts");
+  const encode = (source) => new TextEncoder().encode(source);
+  const rejected = (source) => {
+    try {
+      prepareSvgImport(encode(source));
+      return false;
+    } catch {
+      return true;
+    }
+  };
+
+  const fixedSource = `<svg xmlns="http://www.w3.org/2000/svg" width="4" height="3">
+    <rect width="2" height="1" fill="#ff0000"/>
+  </svg>`;
+  const fixed = prepareSvgImport(encode(fixedSource));
+  const viewBoxOnly = prepareSvgImport(
+    encode(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 10"/>`),
+  );
+  const missing = prepareSvgImport(
+    encode(`<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>`),
+  );
+  const inlineRaster = prepareSvgImport(
+    encode(`<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1">
+      <image width="1" height="1" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="/>
+    </svg>`),
+  );
+
+  const image = await rasterizeSvg(encode(fixedSource));
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(image, 0, 0);
+  const red = [...ctx.getImageData(0, 0, 1, 1).data];
+  const transparent = [...ctx.getImageData(3, 2, 1, 1).data];
+
+  return {
+    fixed: [fixed.width, fixed.height],
+    viewBoxOnly: [viewBoxOnly.width, viewBoxOnly.height],
+    missing: [missing.width, missing.height],
+    inlineRaster: [inlineRaster.width, inlineRaster.height],
+    red,
+    transparent,
+    rejectsScript: rejected(
+      `<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`,
+    ),
+    rejectsEvent: rejected(
+      `<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>`,
+    ),
+    rejectsRemote: rejected(
+      `<svg xmlns="http://www.w3.org/2000/svg"><image href="https://example.com/a.png"/></svg>`,
+    ),
+    rejectsFile: rejected(
+      `<svg xmlns="http://www.w3.org/2000/svg"><image href="file:///tmp/a.png"/></svg>`,
+    ),
+    rejectsNestedSvg: rejected(
+      `<svg xmlns="http://www.w3.org/2000/svg"><image href="data:image/svg+xml,%3Csvg/%3E"/></svg>`,
+    ),
+    rejectsOversize: rejected(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="8193" height="1"/>`,
+    ),
+  };
+});
+const svgOk =
+  svgImport.fixed.join("x") === "4x3" &&
+  svgImport.viewBoxOnly.join("x") === "20x10" &&
+  svgImport.missing.join("x") === "300x150" &&
+  svgImport.inlineRaster.join("x") === "1x1" &&
+  svgImport.red[0] > 240 &&
+  svgImport.red[1] < 10 &&
+  svgImport.red[2] < 10 &&
+  svgImport.red[3] === 255 &&
+  svgImport.transparent[3] === 0 &&
+  svgImport.rejectsScript &&
+  svgImport.rejectsEvent &&
+  svgImport.rejectsRemote &&
+  svgImport.rejectsFile &&
+  svgImport.rejectsNestedSvg &&
+  svgImport.rejectsOversize;
+step(
+  "SVG imports rasterize predictably and reject active or external content",
+  svgOk,
+  JSON.stringify(svgImport),
+);
+
 await page.screenshot({ path: path.join(ARTIFACTS, "e2e-final.png") });
 await browser.close();
 await server.close();

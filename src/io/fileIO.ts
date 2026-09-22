@@ -1,4 +1,4 @@
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { message, open, save } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { engine, usePaintStore } from "../state/store";
 import {
@@ -6,8 +6,10 @@ import {
   SAVE_UTIS,
   canEncode,
   encodingFor,
+  extOf,
   type Encoding,
 } from "./formats";
+import { rasterizeSvg, SvgImportError } from "./svgImport";
 
 // File → Open. Decode the chosen image and replace the whole document.
 export async function openImage(): Promise<void> {
@@ -18,14 +20,42 @@ export async function openImage(): Promise<void> {
   });
   if (typeof selected !== "string") return;
 
-  // Read the bytes through our Rust command (returns an ArrayBuffer) so the
-  // user can open from anywhere without fs-scope restrictions.
-  const bytes = await invoke<ArrayBuffer>("read_image_file", { path: selected });
-  const bitmap = await createImageBitmap(new Blob([new Uint8Array(bytes)]));
-  engine.loadBitmap(bitmap);
-  bitmap.close();
+  try {
+    // Read the bytes through our Rust command (returns an ArrayBuffer) so the
+    // user can open from anywhere without fs-scope restrictions.
+    const raw = await invoke<ArrayBuffer>("read_image_file", { path: selected });
+    const bytes = new Uint8Array(raw);
 
-  usePaintStore.getState().setFilePath(selected);
+    // Decode and validate fully before touching the engine. In particular,
+    // SVG is parsed in a detached document and rejected if it could execute or
+    // fetch anything. Any failure leaves pixels/history/path/dirty untouched.
+    if (extOf(selected) === "svg") {
+      const image = await rasterizeSvg(bytes);
+      engine.loadBitmap(image);
+    } else {
+      const bitmap = await createImageBitmap(new Blob([bytes]));
+      try {
+        engine.loadBitmap(bitmap);
+      } finally {
+        bitmap.close();
+      }
+    }
+    usePaintStore.getState().setFilePath(selected);
+  } catch (err) {
+    console.error("Failed to open image:", err);
+    const detail =
+      err instanceof SvgImportError
+        ? err.message
+        : "The file may be damaged or use an unsupported image format.";
+    try {
+      await message(`“${basename(selected)}” could not be opened.\n\n${detail}`, {
+        title: "Open Image",
+        kind: "error",
+      });
+    } catch (dialogErr) {
+      console.error("Failed to show the open-image error dialog:", dialogErr);
+    }
+  }
 }
 
 // File → Save / Save As. An already-saved file re-writes in place with no

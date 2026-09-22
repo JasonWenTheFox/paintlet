@@ -50,6 +50,11 @@ describe("encoder table", () => {
       expect(OPEN_EXTS).toContain(ext);
     }
   });
+
+  it("offers SVG for opening without offering an encoder", () => {
+    expect(OPEN_EXTS).toContain("svg");
+    expect(ENCODERS).not.toHaveProperty("svg");
+  });
 });
 
 describe("save panel format popup", () => {
@@ -93,6 +98,7 @@ describe("save-path decisions", () => {
   it("refuses an in-place re-write for read-only formats", () => {
     expect(canEncode("/a/b.webp")).toBe(false);
     expect(canEncode("/a/b.heic")).toBe(false);
+    expect(canEncode("/a/b.svg")).toBe(false);
   });
 
   it("falls back to PNG for an unknown or absent extension", () => {

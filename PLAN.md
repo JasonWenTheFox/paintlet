@@ -21,7 +21,7 @@ Where the app stands today, grouped by state.
 - **Text** — multi-line editor with an editable font combobox that previews each choice in its own typeface (any installed font can be typed; a broad macOS list is suggested, and the full installed set is offered where the Local Font Access API is available), a size field with large ± steppers (native spinners hidden), and bold / italic / underline / strikethrough; typed in Color 1. The floating box has a grab bar to reposition it before committing, and placing it never scrolls (shifts) the canvas. Rasterized on commit and not re-editable afterward.
 - **Selection** — rectangular marquee (**Shift** = square) and free-form lasso, with marching ants along the exact outline; drag inside to move; eight resize grips scale it (**Shift** keeps the aspect ratio); **Delete** clears it; **Select All** (⌘A). Selections are **transparent**: the background color (Color 2) inside a moved or pasted selection drops out, so it never stamps a solid block over what's underneath. Copy/cut/delete on a lasso clip to the outline, not its bounding box. The selection survives switching between the marquee and the lasso.
 - **Copy / Cut / Paste** — ⌘C / ⌘X / ⌘V through the system clipboard as an image, with an in-app fallback; paste drops in a floating selection ready to drag.
-- **Save / Open** — Opens PNG, JPEG, GIF, WebP, BMP, and HEIC. Save is one step: an already-saved file re-writes in place, and a new document opens the native save panel directly — no extra in-app dialog. The panel carries a **format popup** — PNG / JPEG / Windows BMP / GIF, like Paint's "Save as type" — which picks the encoder by rewriting the filename's extension; typing an extension works too. Defaults to PNG, and JPEG encodes at 0.92. WebP and HEIC open but can't be written, so ⌘S on one goes to the save panel instead of overwriting it. Window title + dirty-dot track the current file; the close button / ⌘W confirm before discarding unsaved changes.
+- **Save / Open** — Opens PNG, JPEG, GIF, WebP, BMP, HEIC, and safely rasterized SVG. Save is one step: an already-saved file re-writes in place, and a new document opens the native save panel directly — no extra in-app dialog. The panel carries a **format popup** — PNG / JPEG / Windows BMP / GIF, like Paint's "Save as type" — which picks the encoder by rewriting the filename's extension; typing an extension works too. Defaults to PNG, and JPEG encodes at 0.92. WebP, HEIC, and SVG are import-only, so ⌘S on one goes to the save panel instead of overwriting it. Window title + dirty-dot track the current file; the close button / ⌘W confirm before discarding unsaved changes.
 - **Image ops** — Resize (by pixels or percentage, aspect-locked by default, unlock to stretch; always resamples smoothly, as Paint does), Crop to selection, Flip Horizontal / Vertical, Rotate 90° right / left / 180°, and edge/corner drag handles on the canvas that crop or extend it (white fill, dashed preview). All undoable across the size change.
 - **Native macOS menu bar** — File / Edit / View with real ⌘-shortcuts: New (⌘N), Open (⌘O), Save (⌘S), Save As (⇧⌘S), Undo/Redo, Cut/Copy/Paste, Select All. The image operations live under Edit (no separate Image menu). The system's auto-inserted Edit items are gone: Dictation / Emoji & Symbols via their NSUserDefaults switches at startup, Writing Tools / AutoFill stripped from the installed menu (they have no switch). The app menu is About Paintlet + Quit (Hide / Hide Others / Show All removed); About shows the version, a link to the GitHub repo, and the MIT license line.
 - **Undo / redo** — ⌘Z / ⇧⌘Z and toolbar buttons; snapshot history (30 steps) that tracks dimensions so it spans resize/crop; buttons grey out when unavailable.
@@ -326,7 +326,7 @@ The bucket fills by exact color match, so any anti-aliased edge leaves a one-pix
 - **Brush** — anti-aliased freehand (the pencil's smooth counterpart).
 - **Eraser · Eyedropper · Fill (bucket)** — standard Paint behavior; left / right paints Color 1 / Color 2.
 - **Text** — choose font, size, and bold / italic / underline / strikethrough; text rasterizes on commit and is not re-editable after placing.
-- **Open** — PNG, JPEG, GIF, WebP, BMP, HEIC. **Save** — PNG (default), JPEG, BMP, or GIF.
+- **Open** — PNG, JPEG, GIF, WebP, BMP, HEIC, and rasterized SVG. **Save** — PNG (default), JPEG, BMP, or GIF.
 - **Image operations** — flip horizontal / vertical, rotate 90°, resize by percentage or pixels (aspect locked by default, unlock to stretch), crop to selection.
 - **Zoom** — keyboard shortcuts for in / out / reset.
 - **Keyboard shortcuts** — save, new, copy, paste (plus undo / redo, select-all, and single-key tool switching).
@@ -341,7 +341,7 @@ Layers · transparency / alpha · AI features (Cocreator, generative fill) · st
 
 The **native dialog** picks the path (`plugin-dialog`), but the **bytes move through our own Rust commands** — `read_image_file` and `write_image_file` in `src-tauri/src/lib.rs`. That indirection is the point: `plugin-fs` is scope-restricted, so reading and writing arbitrary user-chosen paths through it would mean either a permissive scope or a failure on every folder we didn't anticipate. A custom command is already trusted, so the user's choice in the file panel is the only authorization needed.
 
-- **Open** — `read_image_file` → `createImageBitmap` → `engine.loadBitmap()`, which resizes the canvas, draws, and seeds history in one step.
+- **Open** — `read_image_file` → raster decoding → `engine.loadBitmap()`, which resizes the canvas, draws, and seeds history in one step. Bitmap formats use `createImageBitmap`; SVG is first parsed and validated, then decoded in the browser's restricted image context.
 - **Save** — `canvas.toBlob()` → `write_image_file`. One step: an already-saved file re-writes in place; a new document goes straight to the save panel, whose **format popup** (PNG / JPEG / Windows BMP / GIF) chooses the encoder.
 
 ### Why the save panel is hand-built
@@ -365,10 +365,12 @@ The command is deliberately **synchronous**: AppKit panels are main-thread-only 
 
 Rust moves raw bytes, so the codec set is entirely WebKit's — and it is **asymmetric**, which is the whole reason `io/formats.ts` exists as its own module. Verified by round-tripping a canvas in WKWebView on macOS 26:
 
-| | PNG | JPEG | GIF | BMP | TIFF | WebP | HEIC | AVIF |
-|---|---|---|---|---|---|---|---|---|
-| Decode (`createImageBitmap`) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — |
-| Encode (`canvas.toBlob`) | ✓ | ✓ | ✓ | ✓ | ✓ | — | — | — |
+| | PNG | JPEG | GIF | BMP | TIFF | WebP | HEIC | AVIF | SVG |
+|---|---|---|---|---|---|---|---|---|---|
+| Decode | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓* |
+| Encode (`canvas.toBlob`) | ✓ | ✓ | ✓ | ✓ | ✓ | — | — | — | — |
+
+\* SVG does not use the bitmap codec path. Paintlet resolves a bounded pixel size, rejects active or external content, and decodes the validated document through an `<img>` before it reaches the canvas. The result is pixels only; SVG saving and editable vector objects remain out of scope.
 
 Two consequences worth knowing before touching this code:
 

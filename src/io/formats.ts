@@ -20,6 +20,7 @@ export const OPEN_EXTS = [
   "bmp",
   "heic",
   "heif",
+  "svg",
 ];
 
 export interface Encoding {
