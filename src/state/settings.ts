@@ -1,8 +1,8 @@
 import type { Theme } from "../engine/types";
+import type { LanguagePreference } from "../i18n";
 
 // Persisted app settings, stored in localStorage so they survive across
-// launches. Just the theme — Paint has no preferences window, and theme is the
-// one thing a macOS app is expected to let you pin.
+// launches. Theme and language are shared with the separate About webview.
 //
 // This module is deliberately free of any engine or store import: the About
 // window is a separate webview that needs the theme but must NOT instantiate a
@@ -14,16 +14,20 @@ export const SETTINGS_KEY = "paintlet.settings";
 
 export interface PersistedSettings {
   theme: Theme;
+  language: LanguagePreference;
 }
 
 // Light rather than "system": Paintlet is a Paint homage, and Paint is a
 // light-chrome app, so a first launch on a dark-mode Mac should still look like
 // the thing it's imitating. "system" is one click away in Settings (⌘,) and is
 // remembered, so the cost of this choice lands only on the very first launch.
-const DEFAULTS: PersistedSettings = { theme: "light" };
+const DEFAULTS: PersistedSettings = { theme: "light", language: "system" };
 
 const isTheme = (t: unknown): t is Theme =>
   t === "light" || t === "dark" || t === "system";
+
+const isLanguage = (language: unknown): language is LanguagePreference =>
+  language === "system" || language === "en" || language === "zh-CN";
 
 // Read and validate the persisted blob. Every access is guarded so non-browser
 // contexts (unit tests) and storage-denied webviews fall back silently.
@@ -32,7 +36,10 @@ export function loadSettings(): PersistedSettings {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return DEFAULTS;
     const p = JSON.parse(raw) as Partial<PersistedSettings>;
-    return { theme: isTheme(p.theme) ? p.theme : DEFAULTS.theme };
+    return {
+      theme: isTheme(p.theme) ? p.theme : DEFAULTS.theme,
+      language: isLanguage(p.language) ? p.language : DEFAULTS.language,
+    };
   } catch {
     return DEFAULTS;
   }

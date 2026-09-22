@@ -6,6 +6,7 @@ import {
 } from "@tauri-apps/api/menu";
 import { invoke } from "@tauri-apps/api/core";
 import * as A from "../actions";
+import { translator, type Locale } from "../i18n";
 
 // Build the native macOS menu bar in JS. Each item's `action` calls straight
 // into the shared command layer, so no Rust round-trip is needed. This is the
@@ -23,66 +24,74 @@ const item = (
 
 const sep = () => PredefinedMenuItem.new({ item: "Separator" });
 
-export async function installAppMenu(): Promise<void> {
+let installQueue = Promise.resolve();
+
+export function installAppMenu(locale: Locale): Promise<void> {
+  installQueue = installQueue.catch(() => {}).then(() => buildAppMenu(locale));
+  return installQueue;
+}
+
+async function buildAppMenu(locale: Locale): Promise<void> {
+  const t = translator(locale);
   // Deliberately minimal: About + Quit. The default Hide / Hide Others / Show
   // All items are dropped — they're clutter for a single-window paint app.
   const appMenu = await Submenu.new({
     text: "Paintlet",
     items: [
-      await item("About Paintlet", undefined, A.openAboutWindow),
+      await item(t("menu.about"), undefined, A.openAboutWindow),
       await sep(),
-      await item("Settings…", "CmdOrCtrl+,", A.openSettingsDialog),
+      await item(t("menu.settings"), "CmdOrCtrl+,", A.openSettingsDialog),
       await sep(),
-      await PredefinedMenuItem.new({ item: "Quit", text: "Quit Paintlet" }),
+      await PredefinedMenuItem.new({ item: "Quit", text: t("menu.quit") }),
     ],
   });
 
   const fileMenu = await Submenu.new({
-    text: "File",
+    text: t("menu.file"),
     items: [
-      await item("New", "CmdOrCtrl+N", A.newDocument),
-      await item("Open…", "CmdOrCtrl+O", A.openFile),
+      await item(t("menu.new"), "CmdOrCtrl+N", A.newDocument),
+      await item(t("menu.open"), "CmdOrCtrl+O", A.openFile),
       await sep(),
-      await item("Save", "CmdOrCtrl+S", A.saveFile),
-      await item("Save As…", "CmdOrCtrl+Shift+S", A.saveFileAs),
+      await item(t("menu.save"), "CmdOrCtrl+S", A.saveFile),
+      await item(t("menu.saveAs"), "CmdOrCtrl+Shift+S", A.saveFileAs),
       await sep(),
-      await PredefinedMenuItem.new({ item: "CloseWindow", text: "Close Window" }),
+      await PredefinedMenuItem.new({ item: "CloseWindow", text: t("menu.closeWindow") }),
     ],
   });
 
   // Edit holds the clipboard/selection commands and, folded in below, the image
   // operations (there's no separate Image menu — those commands live here).
   const editMenu = await Submenu.new({
-    text: "Edit",
+    text: t("menu.edit"),
     items: [
-      await item("Undo", "CmdOrCtrl+Z", A.undo),
-      await item("Redo", "CmdOrCtrl+Shift+Z", A.redo),
+      await item(t("menu.undo"), "CmdOrCtrl+Z", A.undo),
+      await item(t("menu.redo"), "CmdOrCtrl+Shift+Z", A.redo),
       await sep(),
-      await item("Cut", "CmdOrCtrl+X", A.cut),
-      await item("Copy", "CmdOrCtrl+C", A.copy),
-      await item("Paste", "CmdOrCtrl+V", A.paste),
-      await item("Delete", undefined, A.deleteSelection),
+      await item(t("menu.cut"), "CmdOrCtrl+X", A.cut),
+      await item(t("menu.copy"), "CmdOrCtrl+C", A.copy),
+      await item(t("menu.paste"), "CmdOrCtrl+V", A.paste),
+      await item(t("menu.delete"), undefined, A.deleteSelection),
       await sep(),
-      await item("Select All", "CmdOrCtrl+A", A.selectAll),
+      await item(t("menu.selectAll"), "CmdOrCtrl+A", A.selectAll),
       await sep(),
-      await item("Resize…", undefined, A.openResizeDialog),
-      await item("Crop to Selection", undefined, A.crop),
+      await item(t("menu.resize"), undefined, A.openResizeDialog),
+      await item(t("menu.crop"), undefined, A.crop),
       await sep(),
-      await item("Flip Horizontal", undefined, A.flipHorizontal),
-      await item("Flip Vertical", undefined, A.flipVertical),
-      await item("Rotate 90° Right", undefined, A.rotateRight),
-      await item("Rotate 90° Left", undefined, A.rotateLeft),
-      await item("Rotate 180°", undefined, A.rotate180),
+      await item(t("menu.flipHorizontal"), undefined, A.flipHorizontal),
+      await item(t("menu.flipVertical"), undefined, A.flipVertical),
+      await item(t("menu.rotateRight"), undefined, A.rotateRight),
+      await item(t("menu.rotateLeft"), undefined, A.rotateLeft),
+      await item(t("menu.rotate180"), undefined, A.rotate180),
     ],
   });
 
   const viewMenu = await Submenu.new({
-    text: "View",
+    text: t("menu.view"),
     items: [
-      await item("Zoom In", undefined, A.zoomIn),
-      await item("Zoom Out", undefined, A.zoomOut),
-      await item("Actual Size", undefined, A.actualSize),
-      await item("Fit to Window", undefined, A.fitToWindow),
+      await item(t("menu.zoomIn"), undefined, A.zoomIn),
+      await item(t("menu.zoomOut"), undefined, A.zoomOut),
+      await item(t("menu.actualSize"), undefined, A.actualSize),
+      await item(t("menu.fitToWindow"), undefined, A.fitToWindow),
     ],
   });
 
@@ -95,5 +104,6 @@ export async function installAppMenu(): Promise<void> {
   // when it becomes the main menu; there's no defaults switch for them (unlike
   // Dictation/Emoji, suppressed at startup on the Rust side). Strip them now
   // that the menu is installed.
-  await invoke("strip_edit_menu_system_items");
+  await invoke("strip_edit_menu_system_items", { editMenuTitle: t("menu.edit") });
+  await invoke("set_about_window_title", { title: t("about.windowTitle") });
 }

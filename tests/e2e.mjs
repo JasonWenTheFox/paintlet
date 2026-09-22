@@ -740,6 +740,42 @@ step(
   `toolBehindDialog=${behindDialog}`,
 );
 
+// ── 28. language switches live and persists ──────────────────────────────
+await page.evaluate(async () => {
+  const { usePaintStore } = await import("/src/state/store.ts");
+  usePaintStore.getState().setLanguage("zh-CN");
+});
+await page.waitForTimeout(160);
+await action("openSettingsDialog");
+await page.waitForTimeout(80);
+const zhSettings = await page.getByText("设置", { exact: true }).count();
+const zhAppearance = await page.getByText("外观", { exact: true }).count();
+const zhTitle = await page.getByText("未命名 - Paintlet", { exact: true }).count();
+const zhState = await page.evaluate(() => ({
+  lang: document.documentElement.lang,
+  saved: JSON.parse(localStorage.getItem("paintlet.settings") ?? "{}"),
+}));
+await page.evaluate(async () => {
+  const { usePaintStore } = await import("/src/state/store.ts");
+  usePaintStore.getState().setLanguage("en");
+});
+await page.waitForTimeout(120);
+const enSettings = await page.getByText("Settings", { exact: true }).count();
+const enTitle = await page.getByText("Untitled - Paintlet", { exact: true }).count();
+step(
+  "language switches live and persists",
+  zhSettings === 1 &&
+    zhAppearance === 1 &&
+    zhTitle === 1 &&
+    zhState.lang === "zh-CN" &&
+    zhState.saved.language === "zh-CN" &&
+    enSettings === 1 &&
+    enTitle === 1,
+  `zhSettings=${zhSettings} zhAppearance=${zhAppearance} zhTitle=${zhTitle} lang=${zhState.lang} saved=${zhState.saved.language} enSettings=${enSettings} enTitle=${enTitle}`,
+);
+await page.keyboard.press("Escape");
+await page.waitForTimeout(80);
+
 await page.screenshot({ path: path.join(ARTIFACTS, "e2e-final.png") });
 await browser.close();
 await server.close();

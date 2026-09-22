@@ -2,11 +2,9 @@ import { useEffect, useState } from "react";
 import { engine, usePaintStore } from "../../state/store";
 import { DialogFrame } from "./DialogFrame";
 import { SegmentedControl } from "../SegmentedControl";
+import { useTranslation } from "../../hooks/useTranslation";
 
-const UNITS = [
-  { id: "px" as const, label: "Pixels" },
-  { id: "pct" as const, label: "Percent" },
-];
+const UNIT_IDS = ["px", "pct"] as const;
 
 const MIN = 1;
 const MAX = 8192;
@@ -16,6 +14,7 @@ const clamp = (n: number) => Math.max(MIN, Math.min(MAX, Math.round(n || MIN)));
 // pixels or percent, with the aspect ratio locked by default. Resampling isn't
 // exposed — Paint's own Resize dialog has no such control and always resamples.
 export function ResizeDialog() {
+  const t = useTranslation();
   const open = usePaintStore((s) => s.resizeDialogOpen);
   const setOpen = usePaintStore((s) => s.setResizeDialogOpen);
   const { w, h } = usePaintStore((s) => s.imageSize);
@@ -65,7 +64,7 @@ export function ResizeDialog() {
 
   return (
     <DialogFrame
-      title="Resize image"
+      title={t("resize.title")}
       onClose={close}
       className="w-72"
       // Enter only — Esc belongs to DialogFrame, which listens on the window so
@@ -78,14 +77,17 @@ export function ResizeDialog() {
     >
       <SegmentedControl
         className="mb-3"
-        ariaLabel="Resize unit"
+        ariaLabel={t("resize.unit")}
         value={unit}
-        options={UNITS}
+        options={UNIT_IDS.map((id) => ({
+          id,
+          label: t(id === "px" ? "resize.pixels" : "resize.percent"),
+        }))}
         onChange={setUnit}
       />
 
       <label className="mb-2 flex items-center justify-between text-xs text-ink-muted">
-        Width
+        {t("resize.width")}
         <span className="flex items-center gap-1">
           <input
             type="number"
@@ -101,7 +103,7 @@ export function ResizeDialog() {
       </label>
 
       <label className="mb-3 flex items-center justify-between text-xs text-ink-muted">
-        Height
+        {t("resize.height")}
         <span className="flex items-center gap-1">
           <input
             type="number"
@@ -121,7 +123,7 @@ export function ResizeDialog() {
           checked={lock}
           onChange={(e) => setLock(e.target.checked)}
         />
-        Maintain aspect ratio
+        {t("resize.maintainAspect")}
       </label>
 
       <div className="flex justify-end gap-2">
@@ -130,14 +132,14 @@ export function ResizeDialog() {
           onClick={close}
           className="rounded-md px-3 py-1.5 text-xs text-ink hover:bg-hover"
         >
-          Cancel
+          {t("common.cancel")}
         </button>
         <button
           type="button"
           onClick={apply}
           className="rounded-md bg-[var(--vp-accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
         >
-          Resize
+          {t("resize.action")}
         </button>
       </div>
     </DialogFrame>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Icon } from "../Icon";
 import { cx } from "../../lib/cx";
+import { useTranslation } from "../../hooks/useTranslation";
 
 // Shared chrome for Paintlet's in-app modal dialogs (Resize, Settings, Edit
 // Color). These are DOM panels rather than real OS windows — the document lives
@@ -114,6 +115,7 @@ export function DialogFrame({
   /** Optional key handling for the panel, e.g. Enter to confirm. */
   onKeyDown?: (e: React.KeyboardEvent) => void;
 }) {
+  const t = useTranslation();
   const { offset, panelRef, onHeaderPointerDown } = useDialogDrag();
 
   // Esc closes, listened for on the window rather than on the panel. A
@@ -169,8 +171,8 @@ export function DialogFrame({
             type="button"
             data-no-drag
             onClick={onClose}
-            aria-label="Close"
-            title="Close"
+            aria-label={t("common.close")}
+            title={t("common.close")}
             className="absolute right-2.5 flex h-5 w-5 items-center justify-center rounded-md text-ink-muted hover:bg-hover hover:text-ink"
           >
             <Icon name="close" size={13} />

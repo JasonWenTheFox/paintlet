@@ -12,16 +12,17 @@ mod save_panel;
 // tauri.conf.json would spin up its webview at launch and pay the memory for a
 // window most sessions never open.
 #[tauri::command]
-fn open_about_window(app: tauri::AppHandle) -> Result<(), String> {
+fn open_about_window(app: tauri::AppHandle, title: String) -> Result<(), String> {
     // Already open: bring it forward instead of stacking a second copy.
     if let Some(win) = app.get_webview_window("about") {
+        let _ = win.set_title(&title);
         let _ = win.unminimize();
         let _ = win.show();
         return win.set_focus().map_err(|e| e.to_string());
     }
 
     tauri::WebviewWindowBuilder::new(&app, "about", tauri::WebviewUrl::App("about.html".into()))
-        .title("About Paintlet")
+        .title(title)
         .inner_size(340.0, 300.0)
         .resizable(false)
         .maximizable(false)
@@ -33,6 +34,14 @@ fn open_about_window(app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     hide_minimize_and_zoom(&app, "about");
 
+    Ok(())
+}
+
+#[tauri::command]
+fn set_about_window_title(app: tauri::AppHandle, title: String) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("about") {
+        win.set_title(&title).map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
@@ -138,10 +147,10 @@ fn disable_edit_menu_auto_items() {
 // (Writing Tools, AutoFill). The JS side invokes this right after it installs
 // the menu bar; AppKit must only be touched from the main thread.
 #[tauri::command]
-fn strip_edit_menu_system_items(app: tauri::AppHandle) {
+fn strip_edit_menu_system_items(app: tauri::AppHandle, edit_menu_title: String) {
     #[cfg(target_os = "macos")]
     {
-        let _ = app.run_on_main_thread(|| {
+        let _ = app.run_on_main_thread(move || {
             use objc2::MainThreadMarker;
             use objc2_app_kit::NSApplication;
 
@@ -159,7 +168,7 @@ fn strip_edit_menu_system_items(app: tauri::AppHandle) {
                 let Some(submenu) = item.submenu() else {
                     continue;
                 };
-                if submenu.title().to_string() != "Edit" {
+                if submenu.title().to_string() != edit_menu_title {
                     continue;
                 }
                 // Walk backwards so removals don't shift indices still to
@@ -176,6 +185,10 @@ fn strip_edit_menu_system_items(app: tauri::AppHandle) {
                         || title.contains("AutoFill")
                         || title.contains("Start Dictation")
                         || title.contains("Emoji")
+                        || title.contains("写作工具")
+                        || title.contains("自动填充")
+                        || title.contains("听写")
+                        || title.contains("表情")
                     {
                         submenu.removeItem(&sub);
                     }
@@ -193,7 +206,7 @@ fn strip_edit_menu_system_items(app: tauri::AppHandle) {
         });
     }
     #[cfg(not(target_os = "macos"))]
-    let _ = app;
+    let _ = (app, edit_menu_title);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -211,7 +224,8 @@ pub fn run() {
             write_image_file,
             save_image_dialog,
             strip_edit_menu_system_items,
-            open_about_window
+            open_about_window,
+            set_about_window_title
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

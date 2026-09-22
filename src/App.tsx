@@ -13,6 +13,7 @@ import { StatusBar } from "./components/StatusBar";
 import { ResizeDialog } from "./components/dialogs/ResizeDialog";
 import { SettingsDialog } from "./components/dialogs/SettingsDialog";
 import { applyTheme } from "./lib/theme";
+import { useTranslation } from "./hooks/useTranslation";
 
 // Single-key tool shortcuts (no modifier), exactly the set Windows Paint binds
 // and nothing more: no brush key, no shape keys, and `B` is the fill bucket
@@ -45,16 +46,28 @@ const NUDGE: Record<string, [number, number]> = {
 };
 
 function App() {
+  const t = useTranslation();
   const theme = usePaintStore((s) => s.theme);
+  const locale = usePaintStore((s) => s.locale);
+  const refreshSystemLocale = usePaintStore((s) => s.refreshSystemLocale);
   const setTool = usePaintStore((s) => s.setTool);
 
   // Build the native macOS menu bar once. Its items call straight into the
   // action layer (File/Edit/Image/View + ⌘-accelerators).
   useEffect(() => {
-    installAppMenu().catch((err) =>
+    installAppMenu(locale).catch((err) =>
       console.error("Failed to install app menu:", err),
     );
-  }, []);
+  }, [locale]);
+
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
+
+  useEffect(() => {
+    window.addEventListener("languagechange", refreshSystemLocale);
+    return () => window.removeEventListener("languagechange", refreshSystemLocale);
+  }, [refreshSystemLocale]);
 
   // Guard the window close button: if the document has unsaved changes, ask
   // before letting it close. Tauri's onCloseRequested runs our handler and then
@@ -68,7 +81,7 @@ function App() {
         // check below sees it (and so a canceled close doesn't lose it).
         stageHooks.flushTextEdit?.();
         if (!usePaintStore.getState().isDirty) return; // clean → just close
-        const discard = await ask("You have unsaved changes. Close without saving?", {
+        const discard = await ask(t("dialog.unsavedClose"), {
           title: "Paintlet",
           kind: "warning",
         });
@@ -77,7 +90,7 @@ function App() {
       .then((u) => (unlisten = u))
       .catch((err) => console.error("Failed to install close guard:", err));
     return () => unlisten?.();
-  }, []);
+  }, [t]);
 
   // Resolve theme → data-theme on <html>. "system" follows the OS and updates
   // live when the user flips appearance. Shared with the About window's webview,

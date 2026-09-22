@@ -8,13 +8,15 @@ import {
   encodingFor,
   type Encoding,
 } from "./formats";
+import { translator } from "../i18n";
 
 // File → Open. Decode the chosen image and replace the whole document.
 export async function openImage(): Promise<void> {
+  const t = translator(usePaintStore.getState().locale);
   const selected = await open({
     multiple: false,
     directory: false,
-    filters: [{ name: "Images", extensions: OPEN_EXTS }],
+    filters: [{ name: t("file.images"), extensions: OPEN_EXTS }],
   });
   if (typeof selected !== "string") return;
 
@@ -66,7 +68,8 @@ export async function saveImage(saveAs = false): Promise<void> {
 // control doesn't exist — a missing popup is worth degrading over, not
 // blocking a save for.
 async function pickSavePath(current: string | null): Promise<string | null> {
-  const stem = current ? current.replace(/\.[^./\\]+$/, "") : "untitled";
+  const t = translator(usePaintStore.getState().locale);
+  const stem = current ? current.replace(/\.[^./\\]+$/, "") : t("file.untitled");
   const name = `${basename(stem)}.png`;
 
   try {
@@ -90,10 +93,10 @@ async function pickSavePath(current: string | null): Promise<string | null> {
   return await save({
     defaultPath: `${stem}.png`,
     filters: [
-      { name: "PNG image", extensions: ["png"] },
-      { name: "JPEG image", extensions: ["jpg", "jpeg"] },
-      { name: "BMP image", extensions: ["bmp"] },
-      { name: "GIF image", extensions: ["gif"] },
+      { name: t("file.pngImage"), extensions: ["png"] },
+      { name: t("file.jpegImage"), extensions: ["jpg", "jpeg"] },
+      { name: t("file.bmpImage"), extensions: ["bmp"] },
+      { name: t("file.gifImage"), extensions: ["gif"] },
     ],
   });
 }

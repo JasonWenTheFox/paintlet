@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePaintStore } from "../state/store";
 import { ToolButton } from "./ToolButton";
+import { useTranslation } from "../hooks/useTranslation";
 
 // A broad list of fonts that ship with macOS, offered as suggestions. The field
 // is a free-text combobox, so ANY installed font can be typed even if it isn't
@@ -29,6 +30,7 @@ const clampSize = (n: number) => Math.max(MIN, Math.min(MAX, Math.round(n || MIN
 // free-text field: typing sets the family even if it isn't in the list, and the
 // native <datalist> can't style options per-font, hence this custom dropdown.
 function FontPicker() {
+  const t = useTranslation();
   const family = usePaintStore((s) => s.textStyle.fontFamily);
   const set = usePaintStore((s) => s.setTextStyle);
   const [fonts, setFonts] = useState<string[]>(MACOS_FONTS);
@@ -84,7 +86,7 @@ function FontPicker() {
         }}
         spellCheck={false}
         className="h-7 w-40 rounded-md border border-hairline bg-surface-raised px-2 text-xs text-ink outline-none focus:border-[var(--vp-accent)]"
-        title="Font — pick one or type any installed font name"
+        title={t("text.font")}
         style={{ fontFamily: family }}
       />
       {open && (
@@ -122,6 +124,7 @@ function FontPicker() {
 // Contextual toolbar segment shown while the Text tool is active: font family
 // (previewing combobox), size (with large ± steppers), and bold / italic / etc.
 export function TextOptions() {
+  const t = useTranslation();
   const style = usePaintStore((s) => s.textStyle);
   const set = usePaintStore((s) => s.setTextStyle);
 
@@ -137,8 +140,8 @@ export function TextOptions() {
       <div className="flex items-center overflow-hidden rounded-md border border-hairline">
         <button
           type="button"
-          title="Smaller"
-          aria-label="Decrease font size"
+          title={t("text.smaller")}
+          aria-label={t("text.decreaseSize")}
           onClick={() => setSize(style.fontSize - 1)}
           className="flex h-7 w-7 items-center justify-center text-base leading-none text-ink hover:bg-hover"
         >
@@ -151,12 +154,12 @@ export function TextOptions() {
           value={style.fontSize}
           onChange={(e) => setSize(Number(e.target.value))}
           className="no-spinner h-7 w-12 border-x border-hairline bg-surface-raised px-1 text-center text-xs text-ink tabular-nums outline-none"
-          title="Font size (px)"
+          title={t("text.fontSize")}
         />
         <button
           type="button"
-          title="Larger"
-          aria-label="Increase font size"
+          title={t("text.larger")}
+          aria-label={t("text.increaseSize")}
           onClick={() => setSize(style.fontSize + 1)}
           className="flex h-7 w-7 items-center justify-center text-base leading-none text-ink hover:bg-hover"
         >
@@ -164,21 +167,21 @@ export function TextOptions() {
         </button>
       </div>
 
-      <ToolButton title="Bold" active={style.bold} onClick={() => set({ bold: !style.bold })}>
+      <ToolButton title={t("text.bold")} active={style.bold} onClick={() => set({ bold: !style.bold })}>
         <span className="text-sm font-bold">B</span>
       </ToolButton>
-      <ToolButton title="Italic" active={style.italic} onClick={() => set({ italic: !style.italic })}>
+      <ToolButton title={t("text.italic")} active={style.italic} onClick={() => set({ italic: !style.italic })}>
         <span className="font-serif text-sm italic">I</span>
       </ToolButton>
       <ToolButton
-        title="Underline"
+        title={t("text.underline")}
         active={style.underline}
         onClick={() => set({ underline: !style.underline })}
       >
         <span className="text-sm underline">U</span>
       </ToolButton>
       <ToolButton
-        title="Strikethrough"
+        title={t("text.strikethrough")}
         active={style.strike}
         onClick={() => set({ strike: !style.strike })}
       >

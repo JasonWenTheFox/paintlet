@@ -6,6 +6,9 @@ import { STAGE_PADDING, viewport } from "./state/viewport";
 import { openImage, saveImage } from "./io/fileIO";
 import { copySelection, cutSelection, pasteClipboard } from "./io/clipboard";
 import { clampZoom } from "./lib/zoom";
+import { translator } from "./i18n";
+
+const t = () => translator(usePaintStore.getState().locale);
 
 // App-level commands, shared by the native menu and the keyboard handlers so a
 // shortcut and its menu item always do the exact same thing. Clipboard/edit
@@ -29,8 +32,8 @@ function editableFocused(): boolean {
 export async function newDocument(): Promise<void> {
   stageHooks.flushTextEdit?.();
   if (usePaintStore.getState().isDirty) {
-    const ok = await ask("Discard the current drawing?", {
-      title: "New Image",
+    const ok = await ask(t()("dialog.discardCurrent"), {
+      title: t()("dialog.newImage"),
       kind: "warning",
     });
     if (!ok) return;
@@ -42,8 +45,8 @@ export async function newDocument(): Promise<void> {
 export async function openFile(): Promise<void> {
   stageHooks.flushTextEdit?.();
   if (usePaintStore.getState().isDirty) {
-    const ok = await ask("Discard the current drawing?", {
-      title: "Open Image",
+    const ok = await ask(t()("dialog.discardCurrent"), {
+      title: t()("dialog.openImage"),
       kind: "warning",
     });
     if (!ok) return;
@@ -132,7 +135,7 @@ export function nudgeSelection(dx: number, dy: number): boolean {
 // rather than a store flag. Fire-and-forget: the window either appears or comes
 // forward, and there's nothing for the caller to wait on.
 export function openAboutWindow(): void {
-  invoke("open_about_window").catch((err) =>
+  invoke("open_about_window", { title: t()("about.windowTitle") }).catch((err) =>
     console.error("Failed to open the About window:", err),
   );
 }

@@ -3,6 +3,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Logo } from "./Logo";
+import { translator, type Locale } from "../i18n";
 
 const REPO_URL = "https://github.com/lucky-bai/paintlet";
 
@@ -14,7 +15,8 @@ const REPO_URL = "https://github.com/lucky-bai/paintlet";
 // to another display. It's also the only dialog where that's cheap — it reads
 // nothing from the CanvasEngine, so there is no IPC contract to maintain. Its
 // only inputs are the bundle version and the persisted theme.
-export function AboutWindow() {
+export function AboutWindow({ locale }: { locale: Locale }) {
+  const t = translator(locale);
   const [version, setVersion] = useState("");
 
   useEffect(() => {
@@ -35,9 +37,13 @@ export function AboutWindow() {
     <div className="flex h-full flex-col items-center justify-center bg-surface px-6 py-5 text-center text-ink select-none">
       <Logo size={64} />
       <h1 className="mt-3 text-base font-semibold">Paintlet</h1>
-      {version && <p className="mt-0.5 text-xs text-ink-muted">Version {version}</p>}
+      {version && (
+        <p className="mt-0.5 text-xs text-ink-muted">
+          {t("about.version", { version })}
+        </p>
+      )}
       <p className="mt-2 text-xs text-ink-muted">
-        An MS Paint-style image editor for macOS.
+        {t("about.description")}
       </p>
 
       <button
@@ -49,7 +55,7 @@ export function AboutWindow() {
       </button>
 
       <p className="mt-3 text-[10px] leading-relaxed text-ink-muted">
-        © 2026 Bai Li. Released under the MIT License.
+        {t("about.copyright")}
       </p>
     </div>
   );

@@ -10,6 +10,7 @@ import { sizedCursor } from "../lib/cursors";
 import { HANDLE_CURSOR, selectionHandles, type HandleId } from "../engine/selectionHandles";
 import type { MouseButton, Point, Rect, TextStyle, ToolId } from "../engine/types";
 import type { PointerInfo, ToolContext } from "../tools/Tool";
+import { useTranslation } from "../hooks/useTranslation";
 
 // The resize-grip cursor under a point on a selection, or null. Mirrors
 // SelectTool.hitHandle so the pointer telegraphs a grab before the drag.
@@ -35,6 +36,7 @@ type TextEdit = { cx: number; cy: number; value: string };
 // state, and dispatch to the active tool. Text is special-cased (a floating DOM
 // editor), and the selection layer draws marching ants on an animation loop.
 export function CanvasStage() {
+  const t = useTranslation();
   const baseRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const selectionRef = useRef<HTMLCanvasElement>(null);
@@ -780,7 +782,7 @@ export function CanvasStage() {
             <div
               key={dir}
               data-dir={dir}
-              title="Drag to resize the canvas"
+              title={t("canvas.resize")}
               className="absolute z-10 h-2.5 w-2.5 rounded-[2px] border border-neutral-400 bg-white shadow-sm"
               style={{ ...pos, cursor: HANDLE_CURSOR[dir] }}
               onPointerDown={onHandleDown(dir)}
@@ -821,7 +823,7 @@ export function CanvasStage() {
           {textEdit && box && (
             <>
               <div
-                title="Drag to move the text"
+                title={t("canvas.moveText")}
                 onPointerDown={onTextHandleDown}
                 onPointerMove={onTextHandleMove}
                 onPointerUp={onTextHandleUp}

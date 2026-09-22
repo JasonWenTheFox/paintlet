@@ -1,17 +1,19 @@
 import { usePaintStore } from "../state/store";
 import { Logo } from "./Logo";
+import { useTranslation } from "../hooks/useTranslation";
 
 // Slim draggable strip under the traffic lights. With titleBarStyle "Overlay"
 // the window content extends to the top edge and the traffic lights float over
 // this strip's left side; the centered document title clears them. The whole
 // strip is a Tauri drag region so the window moves when dragged here.
 export function TitleBar() {
+  const t = useTranslation();
   const filePath = usePaintStore((s) => s.filePath);
   const isDirty = usePaintStore((s) => s.isDirty);
   // Document first, app second, joined by a plain hyphen — the order and
   // punctuation both Windows Paint and the macOS convention use. An unsaved
   // document is "Untitled", with no extension, since it has no file yet.
-  const name = filePath ? filePath.split("/").pop() : "Untitled";
+  const name = filePath ? filePath.split("/").pop() : t("title.untitled");
 
   return (
     <div

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { CanvasEngine } from "../engine/CanvasEngine";
 import { loadSettings, saveSettings } from "./settings";
+import { resolveLocale, type LanguagePreference, type Locale } from "../i18n";
 import type {
   Point,
   TextStyle,
@@ -20,9 +21,9 @@ export const engine = new CanvasEngine();
 // by Image → Resize covers the rare case.
 export const DEFAULT_CANVAS_SIZE = { w: 800, h: 600 };
 
-// The theme is read once at startup and written back on every change; the
-// read/write helpers live in ./settings so the About window's webview can share
-// them without importing the engine.
+// Settings are read once at startup and written back on every change; the
+// helpers live in ./settings so the About window's webview can share them
+// without importing the engine.
 const initialSettings = loadSettings();
 
 interface PaintState {
@@ -39,6 +40,8 @@ interface PaintState {
   cursorPos: Point | null; // for the status bar
   filePath: string | null;
   theme: Theme;
+  language: LanguagePreference;
+  locale: Locale;
   resizeDialogOpen: boolean;
   settingsDialogOpen: boolean;
 
@@ -60,6 +63,8 @@ interface PaintState {
   setZoom: (z: number) => void;
   setCursorPos: (p: Point | null) => void;
   setTheme: (t: Theme) => void;
+  setLanguage: (language: LanguagePreference) => void;
+  refreshSystemLocale: () => void;
   setFilePath: (p: string | null) => void;
   setResizeDialogOpen: (open: boolean) => void;
   setSettingsDialogOpen: (open: boolean) => void;
@@ -74,7 +79,7 @@ interface PaintState {
   }) => void;
 }
 
-export const usePaintStore = create<PaintState>((set) => ({
+export const usePaintStore = create<PaintState>((set, get) => ({
   activeToolId: "pencil",
   previousToolId: "pencil",
   color1: "#000000",
@@ -94,6 +99,8 @@ export const usePaintStore = create<PaintState>((set) => ({
   cursorPos: null,
   filePath: null,
   theme: initialSettings.theme,
+  language: initialSettings.language,
+  locale: resolveLocale(initialSettings.language),
   resizeDialogOpen: false,
   settingsDialogOpen: false,
 
@@ -126,9 +133,19 @@ export const usePaintStore = create<PaintState>((set) => ({
   setZoom: (z) => set((s) => ({ view: { ...s.view, zoom: z } })),
   setCursorPos: (p) => set({ cursorPos: p }),
   setTheme: (t) => {
-    saveSettings({ theme: t });
+    saveSettings({ theme: t, language: get().language });
     set({ theme: t });
   },
+  setLanguage: (language) => {
+    saveSettings({ theme: get().theme, language });
+    set({ language, locale: resolveLocale(language) });
+  },
+  refreshSystemLocale: () =>
+    set((state) =>
+      state.language === "system"
+        ? { locale: resolveLocale("system") }
+        : {},
+    ),
   setFilePath: (p) => set({ filePath: p }),
   setResizeDialogOpen: (open) => set({ resizeDialogOpen: open }),
   setSettingsDialogOpen: (open) => set({ settingsDialogOpen: open }),

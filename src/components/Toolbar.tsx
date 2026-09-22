@@ -7,38 +7,40 @@ import { Icon, type IconName } from "./Icon";
 import { ToolButton } from "./ToolButton";
 import { ColorControls } from "./ColorControls";
 import { TextOptions } from "./TextOptions";
+import type { TranslationKey } from "../i18n";
+import { useTranslation } from "../hooks/useTranslation";
 
 // `key` is the tool's shortcut letter, present only for the tools Windows Paint
 // gives one (see TOOL_KEYS in App.tsx); the rest are mouse-only there and here.
 type ToolDef = {
   id: ToolId;
   icon: IconName;
-  label: string;
+  labelKey: TranslationKey;
   key?: string;
 };
 
 const SELECT_TOOLS: ToolDef[] = [
-  { id: "select", icon: "select", label: "Select", key: "S" },
-  { id: "freeSelect", icon: "lasso", label: "Free-form select" },
+  { id: "select", icon: "select", labelKey: "toolbar.tool.select", key: "S" },
+  { id: "freeSelect", icon: "lasso", labelKey: "toolbar.tool.freeSelect" },
 ];
 
 // Drawing tools laid out to fill two rows (Win11 Paint's compact Tools group).
 const DRAW_TOOLS: ToolDef[] = [
-  { id: "pencil", icon: "pencil", label: "Pencil", key: "P" },
-  { id: "brush", icon: "brush", label: "Brush" },
-  { id: "fill", icon: "fill", label: "Fill with color", key: "B" },
-  { id: "text", icon: "text", label: "Text", key: "T" },
-  { id: "eraser", icon: "eraser", label: "Eraser", key: "E" },
-  { id: "eyedropper", icon: "eyedropper", label: "Color picker", key: "I" },
+  { id: "pencil", icon: "pencil", labelKey: "toolbar.tool.pencil", key: "P" },
+  { id: "brush", icon: "brush", labelKey: "toolbar.tool.brush" },
+  { id: "fill", icon: "fill", labelKey: "toolbar.tool.fill", key: "B" },
+  { id: "text", icon: "text", labelKey: "toolbar.tool.text", key: "T" },
+  { id: "eraser", icon: "eraser", labelKey: "toolbar.tool.eraser", key: "E" },
+  { id: "eyedropper", icon: "eyedropper", labelKey: "toolbar.tool.eyedropper", key: "I" },
 ];
 
 const SHAPE_TOOLS: ToolDef[] = [
-  { id: "line", icon: "line", label: "Line" },
-  { id: "curve", icon: "curve", label: "Curve" },
-  { id: "rectangle", icon: "rectangle", label: "Rectangle" },
-  { id: "roundedRectangle", icon: "roundedRectangle", label: "Rounded rectangle" },
-  { id: "ellipse", icon: "ellipse", label: "Ellipse" },
-  { id: "polygon", icon: "polygon", label: "Polygon" },
+  { id: "line", icon: "line", labelKey: "toolbar.tool.line" },
+  { id: "curve", icon: "curve", labelKey: "toolbar.tool.curve" },
+  { id: "rectangle", icon: "rectangle", labelKey: "toolbar.tool.rectangle" },
+  { id: "roundedRectangle", icon: "roundedRectangle", labelKey: "toolbar.tool.roundedRectangle" },
+  { id: "ellipse", icon: "ellipse", labelKey: "toolbar.tool.ellipse" },
+  { id: "polygon", icon: "polygon", labelKey: "toolbar.tool.polygon" },
 ];
 
 // Shapes draw at one of a few fixed widths (not the continuous pencil slider).
@@ -62,27 +64,29 @@ function Divider() {
 // A compact tool block that fills two rows before starting a new column, so a
 // set of tool buttons stays tight instead of sprawling across one long row.
 function ToolGrid({ tools }: { tools: ToolDef[] }) {
+  const t = useTranslation();
   const activeToolId = usePaintStore((s) => s.activeToolId);
   const setTool = usePaintStore((s) => s.setTool);
   return (
     <div className="grid grid-flow-col grid-rows-2 gap-0.5">
-      {tools.map((t) => {
-        const enabled = isImplemented(t.id);
+      {tools.map((tool) => {
+        const enabled = isImplemented(tool.id);
+        const label = t(tool.labelKey);
         return (
           <ToolButton
-            key={t.id}
+            key={tool.id}
             title={
               !enabled
-                ? `${t.label} — coming soon`
-                : t.key
-                  ? `${t.label} (${t.key})`
-                  : t.label
+                ? t("toolbar.tool.comingSoon", { tool: label })
+                : tool.key
+                  ? t("toolbar.tool.shortcut", { tool: label, key: tool.key })
+                  : label
             }
-            active={activeToolId === t.id}
+            active={activeToolId === tool.id}
             disabled={!enabled}
-            onClick={() => setTool(t.id)}
+            onClick={() => setTool(tool.id)}
           >
-            <Icon name={t.icon} />
+            <Icon name={tool.icon} />
           </ToolButton>
         );
       })}
@@ -144,12 +148,13 @@ function ShapeSizePicker() {
 // tool, the fixed-width picker for shapes, the continuous slider for freehand
 // strokes, and nothing for tools with no size (select/lasso/fill/eyedropper).
 function ContextGroup() {
+  const t = useTranslation();
   const activeToolId = usePaintStore((s) => s.activeToolId);
   if (activeToolId === "text")
     return (
       <>
         <Divider />
-        <Group label="Text">
+        <Group label={t("toolbar.group.text")}>
           <TextOptions />
         </Group>
       </>
@@ -158,7 +163,7 @@ function ContextGroup() {
     return (
       <>
         <Divider />
-        <Group label="Size">
+        <Group label={t("toolbar.group.size")}>
           <ShapeSizePicker />
         </Group>
       </>
@@ -167,7 +172,7 @@ function ContextGroup() {
     return (
       <>
         <Divider />
-        <Group label="Size">
+        <Group label={t("toolbar.group.size")}>
           <SizeSlider />
         </Group>
       </>
@@ -176,32 +181,33 @@ function ContextGroup() {
 }
 
 export function Toolbar() {
+  const t = useTranslation();
   const canUndo = usePaintStore((s) => s.canUndo);
   const canRedo = usePaintStore((s) => s.canRedo);
 
   return (
     <div className="flex shrink-0 items-stretch gap-1 border-b border-hairline bg-surface px-2 py-1.5">
-      <Group label="History">
-        <ToolButton title="Undo (⌘Z)" disabled={!canUndo} onClick={() => engine.undo()}>
+      <Group label={t("toolbar.group.history")}>
+        <ToolButton title={t("toolbar.undo")} disabled={!canUndo} onClick={() => engine.undo()}>
           <Icon name="undo" />
         </ToolButton>
-        <ToolButton title="Redo (⇧⌘Z)" disabled={!canRedo} onClick={() => engine.redo()}>
+        <ToolButton title={t("toolbar.redo")} disabled={!canRedo} onClick={() => engine.redo()}>
           <Icon name="redo" />
         </ToolButton>
       </Group>
 
       <Divider />
-      <Group label="Select">
+      <Group label={t("toolbar.group.select")}>
         <ToolGrid tools={SELECT_TOOLS} />
       </Group>
 
       <Divider />
-      <Group label="Tools">
+      <Group label={t("toolbar.group.tools")}>
         <ToolGrid tools={DRAW_TOOLS} />
       </Group>
 
       <Divider />
-      <Group label="Shapes">
+      <Group label={t("toolbar.group.shapes")}>
         <ToolGrid tools={SHAPE_TOOLS} />
       </Group>
 
@@ -210,7 +216,7 @@ export function Toolbar() {
       {/* Colors, pushed to the right. */}
       <div className="ml-auto flex items-stretch">
         <Divider />
-        <Group label="Colors">
+        <Group label={t("toolbar.group.colors")}>
           <ColorControls />
         </Group>
       </div>

@@ -5,11 +5,13 @@ import { PALETTE } from "../lib/palette";
 import { Icon } from "./Icon";
 import { ColorPicker } from "./ColorPicker";
 import { DialogFrame } from "./dialogs/DialogFrame";
+import { useTranslation } from "../hooks/useTranslation";
 
 // Color 1 / Color 2 swatches + a quick palette grid. Clicking a swatch opens
 // the full color chooser in a popup. Left-click a palette chip = Color 1;
 // right-click = Color 2 (kept from Paint).
 export function ColorControls() {
+  const t = useTranslation();
   const color1 = usePaintStore((s) => s.color1);
   const color2 = usePaintStore((s) => s.color2);
   const setColor1 = usePaintStore((s) => s.setColor1);
@@ -23,8 +25,8 @@ export function ColorControls() {
       type="button"
       title={
         which === "color1"
-          ? "Color 1 (foreground) — click to edit"
-          : "Color 2 (background) — click to edit"
+          ? t("colors.color1Edit")
+          : t("colors.color2Edit")
       }
       onClick={() => setEditing(which)}
       className={cx(
@@ -42,8 +44,8 @@ export function ColorControls() {
         <Swatch which="color2" />
         <button
           type="button"
-          title="Swap colors"
-          aria-label="Swap colors"
+          title={t("colors.swap")}
+          aria-label={t("colors.swap")}
           onClick={swapColors}
           className="flex h-7 w-6 items-center justify-center rounded-md text-ink-muted hover:bg-hover"
         >
@@ -57,7 +59,7 @@ export function ColorControls() {
           <button
             key={c}
             type="button"
-            title={`${c} — click for Color 1, right-click for Color 2`}
+            title={t("colors.paletteHint", { color: c })}
             onClick={() => setColor1(c)}
             onContextMenu={(e) => {
               e.preventDefault();
@@ -73,7 +75,7 @@ export function ColorControls() {
           off the area you're matching a color against is the whole point. */}
       {editing && (
         <DialogFrame
-          title={`Edit ${editing === "color1" ? "Color 1" : "Color 2"}`}
+          title={t(editing === "color1" ? "colors.editColor1" : "colors.editColor2")}
           onClose={() => setEditing(null)}
         >
           <ColorPicker
@@ -86,7 +88,7 @@ export function ColorControls() {
               onClick={() => setEditing(null)}
               className="rounded-md bg-[var(--vp-accent)] px-4 py-1.5 text-xs font-medium text-white hover:opacity-90"
             >
-              Done
+              {t("common.done")}
             </button>
           </div>
         </DialogFrame>
