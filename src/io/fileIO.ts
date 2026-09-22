@@ -1,4 +1,4 @@
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { message, open, save } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { engine, usePaintStore } from "../state/store";
 import {
@@ -6,6 +6,8 @@ import {
   SAVE_UTIS,
   canEncode,
   encodingFor,
+  extOf,
+  isCompleteAvifContainer,
   type Encoding,
 } from "./formats";
 
@@ -18,14 +20,35 @@ export async function openImage(): Promise<void> {
   });
   if (typeof selected !== "string") return;
 
-  // Read the bytes through our Rust command (returns an ArrayBuffer) so the
-  // user can open from anywhere without fs-scope restrictions.
-  const bytes = await invoke<ArrayBuffer>("read_image_file", { path: selected });
-  const bitmap = await createImageBitmap(new Blob([new Uint8Array(bytes)]));
-  engine.loadBitmap(bitmap);
-  bitmap.close();
+  try {
+    // Read the bytes through our Rust command (returns an ArrayBuffer) so the
+    // user can open from anywhere without fs-scope restrictions.
+    const raw = await invoke<ArrayBuffer>("read_image_file", { path: selected });
+    const bytes = new Uint8Array(raw);
+    if (extOf(selected) === "avif" && !isCompleteAvifContainer(bytes)) {
+      throw new Error("Invalid or incomplete AVIF container");
+    }
 
-  usePaintStore.getState().setFilePath(selected);
+    // Decode before touching the engine. A malformed or unsupported file must
+    // leave the current pixels, history, dirty state, and path unchanged.
+    const bitmap = await createImageBitmap(new Blob([bytes]));
+    try {
+      engine.loadBitmap(bitmap);
+    } finally {
+      bitmap.close();
+    }
+    usePaintStore.getState().setFilePath(selected);
+  } catch (err) {
+    console.error("Failed to open image:", err);
+    try {
+      await message(
+        `“${basename(selected)}” could not be opened. The file may be damaged, be in an unsupported image format, or require a newer version of macOS.`,
+        { title: "Open Image", kind: "error" },
+      );
+    } catch (dialogErr) {
+      console.error("Failed to show the open-image error dialog:", dialogErr);
+    }
+  }
 }
 
 // File → Save / Save As. An already-saved file re-writes in place with no

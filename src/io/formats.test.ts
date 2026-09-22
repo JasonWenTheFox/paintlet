@@ -7,6 +7,7 @@ import {
   canEncode,
   encodingFor,
   extOf,
+  isCompleteAvifContainer,
 } from "./formats";
 
 describe("extOf", () => {
@@ -93,6 +94,7 @@ describe("save-path decisions", () => {
   it("refuses an in-place re-write for read-only formats", () => {
     expect(canEncode("/a/b.webp")).toBe(false);
     expect(canEncode("/a/b.heic")).toBe(false);
+    expect(canEncode("/a/b.avif")).toBe(false);
   });
 
   it("falls back to PNG for an unknown or absent extension", () => {
@@ -108,5 +110,52 @@ describe("save-path decisions", () => {
   it("picks the matching encoder for GIF and BMP", () => {
     expect(encodingFor("/a/b.gif").type).toBe("image/gif");
     expect(encodingFor("/a/b.BMP").type).toBe("image/bmp");
+  });
+});
+
+describe("AVIF import", () => {
+  const ascii = (value: string) => [...value].map((c) => c.charCodeAt(0));
+  const box = (type: string, payload: number[]) => {
+    const size = 8 + payload.length;
+    return new Uint8Array([
+      (size >>> 24) & 0xff,
+      (size >>> 16) & 0xff,
+      (size >>> 8) & 0xff,
+      size & 0xff,
+      ...ascii(type),
+      ...payload,
+    ]);
+  };
+  const concat = (...parts: Uint8Array[]) => {
+    const result = new Uint8Array(parts.reduce((n, part) => n + part.length, 0));
+    let offset = 0;
+    for (const part of parts) {
+      result.set(part, offset);
+      offset += part.length;
+    }
+    return result;
+  };
+  const fixture = () =>
+    concat(
+      box("ftyp", [...ascii("avif"), 0, 0, 0, 0, ...ascii("mif1")]),
+      box("mdat", [1, 2, 3, 4]),
+    );
+
+  it("offers AVIF for opening without offering an encoder", () => {
+    expect(OPEN_EXTS).toContain("avif");
+    expect(ENCODERS).not.toHaveProperty("avif");
+  });
+
+  it("accepts a complete AVIF container", () => {
+    expect(isCompleteAvifContainer(fixture())).toBe(true);
+  });
+
+  it("rejects a truncated AVIF container", () => {
+    const complete = fixture();
+    expect(isCompleteAvifContainer(complete.slice(0, -1))).toBe(false);
+  });
+
+  it("rejects non-AVIF bytes behind an .avif name", () => {
+    expect(isCompleteAvifContainer(new TextEncoder().encode("not an image"))).toBe(false);
   });
 });

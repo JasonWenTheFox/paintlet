@@ -20,6 +20,7 @@ export const OPEN_EXTS = [
   "bmp",
   "heic",
   "heif",
+  "avif",
 ];
 
 export interface Encoding {
@@ -80,4 +81,66 @@ export function canEncode(path: string): boolean {
 
 export function encodingFor(path: string): Encoding {
   return ENCODERS[extOf(path)] ?? PNG_ENCODING;
+}
+
+// WebKit normally rejects undecodable images, but ImageIO can recover a
+// truncated AVIF as a correctly sized, fully transparent bitmap. Replacing the
+// current drawing with that recovery would turn file damage into silent data
+// loss, so do the small amount of container validation we can do locally:
+// every top-level ISO BMFF box must fit in the file, and the ftyp box must name
+// an AVIF still image or sequence. The decoder remains responsible for the
+// image payload and every other format.
+export function isCompleteAvifContainer(bytes: Uint8Array): boolean {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let offset = 0;
+  let avifBrand = false;
+
+  while (offset < bytes.byteLength) {
+    const remaining = bytes.byteLength - offset;
+    if (remaining < 8) return false;
+
+    let size = view.getUint32(offset);
+    const type = boxString(bytes, offset + 4);
+    let headerSize = 8;
+
+    if (size === 1) {
+      if (remaining < 16) return false;
+      const high = view.getUint32(offset + 8);
+      const low = view.getUint32(offset + 12);
+      // Number can represent box sizes exactly while the high word is at most
+      // 21 bits. Larger images are far beyond what a browser canvas can hold.
+      if (high > 0x1fffff) return false;
+      size = high * 0x100000000 + low;
+      headerSize = 16;
+    } else if (size === 0) {
+      size = remaining;
+    }
+
+    if (size < headerSize || size > remaining) return false;
+
+    if (type === "ftyp") {
+      if (size < headerSize + 8) return false;
+      avifBrand ||= isAvifBrand(boxString(bytes, offset + headerSize));
+      for (let pos = offset + headerSize + 8; pos + 4 <= offset + size; pos += 4) {
+        avifBrand ||= isAvifBrand(boxString(bytes, pos));
+      }
+    }
+
+    offset += size;
+  }
+
+  return avifBrand;
+}
+
+function boxString(bytes: Uint8Array, offset: number): string {
+  return String.fromCharCode(
+    bytes[offset],
+    bytes[offset + 1],
+    bytes[offset + 2],
+    bytes[offset + 3],
+  );
+}
+
+function isAvifBrand(brand: string): boolean {
+  return brand === "avif" || brand === "avis";
 }
