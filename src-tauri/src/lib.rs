@@ -291,8 +291,6 @@ pub fn run() {
                     let _ = app.emit("document-open", paths);
                 }
             }
-            #[cfg(not(target_os = "macos"))]
-            let _ = (app, event);
         });
 }
 

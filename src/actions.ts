@@ -1,4 +1,4 @@
-import { ask, message } from "@tauri-apps/plugin-dialog";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { DEFAULT_CANVAS_SIZE, engine, usePaintStore } from "./state/store";
 import { stageHooks } from "./state/stageHooks";
@@ -28,9 +28,8 @@ function editableFocused(): boolean {
 // Every entry point that exports or replaces the document commits a pending
 // text edit first — typed-but-unplaced text must never be silently dropped.
 
-// Replacing the current document goes through this check whether the request
-// came from the menu (File → Open) or from macOS (Finder double-click, Open
-// With) — one prompt, one wording, everywhere.
+// Every command that replaces the current document (New, Open, a Finder open)
+// asks through this — one prompt, one wording, everywhere.
 async function confirmDiscard(title: string): Promise<boolean> {
   if (!usePaintStore.getState().isDirty) return true;
   return ask("Discard the current drawing?", { title, kind: "warning" });
@@ -38,13 +37,7 @@ async function confirmDiscard(title: string): Promise<boolean> {
 
 export async function newDocument(): Promise<void> {
   stageHooks.flushTextEdit?.();
-  if (usePaintStore.getState().isDirty) {
-    const ok = await ask("Discard the current drawing?", {
-      title: "New Image",
-      kind: "warning",
-    });
-    if (!ok) return;
-  }
+  if (!(await confirmDiscard("New Image"))) return;
   engine.newDocument(DEFAULT_CANVAS_SIZE.w, DEFAULT_CANVAS_SIZE.h);
   usePaintStore.getState().setFilePath(null);
 }
@@ -61,33 +54,15 @@ export async function openFile(): Promise<void> {
 //
 // Single-document policy: the first openable path wins and the rest of the
 // request is ignored — the same behavior as the dialog's multiple: false, and
-// one document per request is all a window with no tabs can show. A request
-// with nothing openable is reported, not swallowed: a double-click that
-// appears to do nothing reads as a bug, so it gets one plain explanation.
+// one document per request is all a window with no tabs can show. A file that
+// fails to load leaves the document untouched, as it does from File → Open.
 export async function openFromSystem(paths: string[]): Promise<void> {
   const path = firstOpenablePath(paths);
-  if (!path) {
-    await message("Paintlet can't open this kind of file.", {
-      title: "Paintlet",
-      kind: "warning",
-    });
-    return;
-  }
+  if (!path) return;
 
   stageHooks.flushTextEdit?.();
   if (!(await confirmDiscard("Open Image"))) return;
-
-  try {
-    await loadImageFromPath(path);
-  } catch (err) {
-    // The file moved, shrank to zero bytes, or isn't what its extension
-    // claims — again, one plain explanation beats a silent no-op.
-    console.error(`Failed to open ${path}:`, err);
-    await message("Paintlet couldn't open this file.", {
-      title: "Paintlet",
-      kind: "warning",
-    });
-  }
+  await loadImageFromPath(path);
 }
 export function saveFile(): void {
   stageHooks.flushTextEdit?.();
