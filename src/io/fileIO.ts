@@ -1,13 +1,14 @@
-import { message, open, save } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { engine, usePaintStore } from "../state/store";
 import {
+  ISO_BMFF_EXTS,
   OPEN_EXTS,
   SAVE_UTIS,
   canEncode,
   encodingFor,
   extOf,
-  isCompleteAvifContainer,
+  isCompleteIsoBmff,
   type Encoding,
 } from "./formats";
 
@@ -20,35 +21,22 @@ export async function openImage(): Promise<void> {
   });
   if (typeof selected !== "string") return;
 
-  try {
-    // Read the bytes through our Rust command (returns an ArrayBuffer) so the
-    // user can open from anywhere without fs-scope restrictions.
-    const raw = await invoke<ArrayBuffer>("read_image_file", { path: selected });
-    const bytes = new Uint8Array(raw);
-    if (extOf(selected) === "avif" && !isCompleteAvifContainer(bytes)) {
-      throw new Error("Invalid or incomplete AVIF container");
-    }
-
-    // Decode before touching the engine. A malformed or unsupported file must
-    // leave the current pixels, history, dirty state, and path unchanged.
-    const bitmap = await createImageBitmap(new Blob([bytes]));
-    try {
-      engine.loadBitmap(bitmap);
-    } finally {
-      bitmap.close();
-    }
-    usePaintStore.getState().setFilePath(selected);
-  } catch (err) {
-    console.error("Failed to open image:", err);
-    try {
-      await message(
-        `“${basename(selected)}” could not be opened. The file may be damaged, be in an unsupported image format, or require a newer version of macOS.`,
-        { title: "Open Image", kind: "error" },
-      );
-    } catch (dialogErr) {
-      console.error("Failed to show the open-image error dialog:", dialogErr);
-    }
+  // Read the bytes through our Rust command (returns an ArrayBuffer) so the
+  // user can open from anywhere without fs-scope restrictions.
+  const bytes = new Uint8Array(
+    await invoke<ArrayBuffer>("read_image_file", { path: selected }),
+  );
+  // ImageIO decodes a truncated AVIF or HEIC as a correctly sized, fully
+  // transparent bitmap instead of failing, which would silently replace the
+  // drawing. Throwing here leaves the document untouched.
+  if (ISO_BMFF_EXTS.includes(extOf(selected)) && !isCompleteIsoBmff(bytes)) {
+    throw new Error(`Incomplete image file: ${selected}`);
   }
+  const bitmap = await createImageBitmap(new Blob([bytes]));
+  engine.loadBitmap(bitmap);
+  bitmap.close();
+
+  usePaintStore.getState().setFilePath(selected);
 }
 
 // File → Save / Save As. An already-saved file re-writes in place with no

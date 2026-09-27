@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   ENCODERS,
+  ISO_BMFF_EXTS,
   OPEN_EXTS,
   SAVE_FORMATS,
   SAVE_UTIS,
   canEncode,
   encodingFor,
   extOf,
-  isCompleteAvifContainer,
+  isCompleteIsoBmff,
 } from "./formats";
 
 describe("extOf", () => {
@@ -113,49 +114,42 @@ describe("save-path decisions", () => {
   });
 });
 
-describe("AVIF import", () => {
+describe("ISO BMFF completeness", () => {
   const ascii = (value: string) => [...value].map((c) => c.charCodeAt(0));
   const box = (type: string, payload: number[]) => {
     const size = 8 + payload.length;
-    return new Uint8Array([
-      (size >>> 24) & 0xff,
-      (size >>> 16) & 0xff,
-      (size >>> 8) & 0xff,
-      size & 0xff,
-      ...ascii(type),
-      ...payload,
-    ]);
+    const header = [size >>> 24, (size >>> 16) & 0xff, (size >>> 8) & 0xff, size & 0xff];
+    return [...header, ...ascii(type), ...payload];
   };
-  const concat = (...parts: Uint8Array[]) => {
-    const result = new Uint8Array(parts.reduce((n, part) => n + part.length, 0));
-    let offset = 0;
-    for (const part of parts) {
-      result.set(part, offset);
-      offset += part.length;
-    }
-    return result;
-  };
-  const fixture = () =>
-    concat(
-      box("ftyp", [...ascii("avif"), 0, 0, 0, 0, ...ascii("mif1")]),
-      box("mdat", [1, 2, 3, 4]),
-    );
+  const file = new Uint8Array([
+    ...box("ftyp", [...ascii("avif"), 0, 0, 0, 0, ...ascii("mif1")]),
+    ...box("mdat", [1, 2, 3, 4]),
+  ]);
 
   it("offers AVIF for opening without offering an encoder", () => {
     expect(OPEN_EXTS).toContain("avif");
     expect(ENCODERS).not.toHaveProperty("avif");
   });
 
-  it("accepts a complete AVIF container", () => {
-    expect(isCompleteAvifContainer(fixture())).toBe(true);
+  it("checks every ISO BMFF format, HEIC included", () => {
+    expect(ISO_BMFF_EXTS).toEqual(expect.arrayContaining(["avif", "heic", "heif"]));
   });
 
-  it("rejects a truncated AVIF container", () => {
-    const complete = fixture();
-    expect(isCompleteAvifContainer(complete.slice(0, -1))).toBe(false);
+  it("accepts a file whose boxes tile it exactly", () => {
+    expect(isCompleteIsoBmff(file)).toBe(true);
   });
 
-  it("rejects non-AVIF bytes behind an .avif name", () => {
-    expect(isCompleteAvifContainer(new TextEncoder().encode("not an image"))).toBe(false);
+  it("accepts a 64-bit box size", () => {
+    const large = [0, 0, 0, 1, ...ascii("mdat"), 0, 0, 0, 0, 0, 0, 0, 20, 1, 2, 3, 4];
+    expect(isCompleteIsoBmff(new Uint8Array(large))).toBe(true);
+  });
+
+  it("rejects a truncated file", () => {
+    expect(isCompleteIsoBmff(file.slice(0, -1))).toBe(false);
+  });
+
+  it("rejects bytes that aren't a box structure", () => {
+    expect(isCompleteIsoBmff(new TextEncoder().encode("not an image"))).toBe(false);
+    expect(isCompleteIsoBmff(new Uint8Array())).toBe(false);
   });
 });
