@@ -20,6 +20,7 @@ export const OPEN_EXTS = [
   "bmp",
   "heic",
   "heif",
+  "avif",
 ];
 
 export interface Encoding {
@@ -80,4 +81,39 @@ export function canEncode(path: string): boolean {
 
 export function encodingFor(path: string): Encoding {
   return ENCODERS[extOf(path)] ?? PNG_ENCODING;
+}
+
+// Formats stored in an ISO BMFF container (the MP4 box structure), which
+// ImageIO decodes leniently: a truncated file comes back as a correctly sized,
+// fully transparent bitmap rather than an error. Opening one would silently
+// replace the drawing, so these get a completeness check first.
+export const ISO_BMFF_EXTS = ["heic", "heif", "avif"];
+
+// True when the top-level boxes tile the file exactly, i.e. none runs past the
+// end. Each box starts with a 32-bit size and a 4-char type; a size of 1 means
+// a 64-bit size follows, and 0 means "extends to end of file". The decoder
+// remains responsible for everything inside the boxes.
+export function isCompleteIsoBmff(bytes: Uint8Array): boolean {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let offset = 0;
+  while (offset < bytes.byteLength) {
+    const remaining = bytes.byteLength - offset;
+    if (remaining < 8) return false;
+    let size = view.getUint32(offset);
+    let headerSize = 8;
+    if (size === 1) {
+      if (remaining < 16) return false;
+      // Exact as a Number while the high word stays under 2^21, which is far
+      // beyond any image a canvas can hold.
+      const high = view.getUint32(offset + 8);
+      if (high > 0x1fffff) return false;
+      size = high * 0x100000000 + view.getUint32(offset + 12);
+      headerSize = 16;
+    } else if (size === 0) {
+      size = remaining;
+    }
+    if (size < headerSize || size > remaining) return false;
+    offset += size;
+  }
+  return offset > 0;
 }

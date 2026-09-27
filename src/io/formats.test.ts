@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   ENCODERS,
+  ISO_BMFF_EXTS,
   OPEN_EXTS,
   SAVE_FORMATS,
   SAVE_UTIS,
   canEncode,
   encodingFor,
   extOf,
+  isCompleteIsoBmff,
 } from "./formats";
 
 describe("extOf", () => {
@@ -93,6 +95,7 @@ describe("save-path decisions", () => {
   it("refuses an in-place re-write for read-only formats", () => {
     expect(canEncode("/a/b.webp")).toBe(false);
     expect(canEncode("/a/b.heic")).toBe(false);
+    expect(canEncode("/a/b.avif")).toBe(false);
   });
 
   it("falls back to PNG for an unknown or absent extension", () => {
@@ -108,5 +111,45 @@ describe("save-path decisions", () => {
   it("picks the matching encoder for GIF and BMP", () => {
     expect(encodingFor("/a/b.gif").type).toBe("image/gif");
     expect(encodingFor("/a/b.BMP").type).toBe("image/bmp");
+  });
+});
+
+describe("ISO BMFF completeness", () => {
+  const ascii = (value: string) => [...value].map((c) => c.charCodeAt(0));
+  const box = (type: string, payload: number[]) => {
+    const size = 8 + payload.length;
+    const header = [size >>> 24, (size >>> 16) & 0xff, (size >>> 8) & 0xff, size & 0xff];
+    return [...header, ...ascii(type), ...payload];
+  };
+  const file = new Uint8Array([
+    ...box("ftyp", [...ascii("avif"), 0, 0, 0, 0, ...ascii("mif1")]),
+    ...box("mdat", [1, 2, 3, 4]),
+  ]);
+
+  it("offers AVIF for opening without offering an encoder", () => {
+    expect(OPEN_EXTS).toContain("avif");
+    expect(ENCODERS).not.toHaveProperty("avif");
+  });
+
+  it("checks every ISO BMFF format, HEIC included", () => {
+    expect(ISO_BMFF_EXTS).toEqual(expect.arrayContaining(["avif", "heic", "heif"]));
+  });
+
+  it("accepts a file whose boxes tile it exactly", () => {
+    expect(isCompleteIsoBmff(file)).toBe(true);
+  });
+
+  it("accepts a 64-bit box size", () => {
+    const large = [0, 0, 0, 1, ...ascii("mdat"), 0, 0, 0, 0, 0, 0, 0, 20, 1, 2, 3, 4];
+    expect(isCompleteIsoBmff(new Uint8Array(large))).toBe(true);
+  });
+
+  it("rejects a truncated file", () => {
+    expect(isCompleteIsoBmff(file.slice(0, -1))).toBe(false);
+  });
+
+  it("rejects bytes that aren't a box structure", () => {
+    expect(isCompleteIsoBmff(new TextEncoder().encode("not an image"))).toBe(false);
+    expect(isCompleteIsoBmff(new Uint8Array())).toBe(false);
   });
 });

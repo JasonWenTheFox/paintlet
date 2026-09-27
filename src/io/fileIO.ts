@@ -2,10 +2,13 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { engine, usePaintStore } from "../state/store";
 import {
+  ISO_BMFF_EXTS,
   OPEN_EXTS,
   SAVE_UTIS,
   canEncode,
   encodingFor,
+  extOf,
+  isCompleteIsoBmff,
   type Encoding,
 } from "./formats";
 
@@ -20,8 +23,16 @@ export async function openImage(): Promise<void> {
 
   // Read the bytes through our Rust command (returns an ArrayBuffer) so the
   // user can open from anywhere without fs-scope restrictions.
-  const bytes = await invoke<ArrayBuffer>("read_image_file", { path: selected });
-  const bitmap = await createImageBitmap(new Blob([new Uint8Array(bytes)]));
+  const bytes = new Uint8Array(
+    await invoke<ArrayBuffer>("read_image_file", { path: selected }),
+  );
+  // ImageIO decodes a truncated AVIF or HEIC as a correctly sized, fully
+  // transparent bitmap instead of failing, which would silently replace the
+  // drawing. Throwing here leaves the document untouched.
+  if (ISO_BMFF_EXTS.includes(extOf(selected)) && !isCompleteIsoBmff(bytes)) {
+    throw new Error(`Incomplete image file: ${selected}`);
+  }
+  const bitmap = await createImageBitmap(new Blob([bytes]));
   engine.loadBitmap(bitmap);
   bitmap.close();
 
